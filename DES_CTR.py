@@ -1,3 +1,5 @@
+import os
+
 # Tabel dan konstanta untuk DES
 IP = [58, 50, 42, 34, 26, 18, 10, 2,
       60, 52, 44, 36, 28, 20, 12, 4,
@@ -26,15 +28,12 @@ def xor(bits1, bits2):
     return [b1 ^ b2 for b1, b2 in zip(bits1, bits2)]
 
 def feistel_function(right, subkey):
-    # Contoh fungsi Feistel sederhana yang hanya menggunakan XOR
+    """Fungsi Feistel sederhana yang hanya menggunakan XOR"""
     return xor(right, subkey)
 
 def des_encrypt_block(block, key):
     """Enkripsi satu blok (64-bit) menggunakan kunci 64-bit"""
-    # Permutasi awal
     block = permute(block, IP)
-
-    # Membagi blok menjadi dua bagian 32-bit
     left, right = block[:32], block[32:]
 
     # 16 putaran DES
@@ -43,14 +42,8 @@ def des_encrypt_block(block, key):
         left = right
         right = new_right
 
-    # Gabungkan kembali dan permutasi akhir
     combined = right + left
     return permute(combined, IP_INV)
-
-def des_decrypt_block(block, key):
-    """Dekripsi satu blok (64-bit) menggunakan kunci 64-bit"""
-    # Sama seperti enkripsi, tapi urutan subkunci dibalik
-    return des_encrypt_block(block, key)  # Karena operasi simetris
 
 def str_to_bits(s):
     """Mengonversi string ke bit list"""
@@ -65,34 +58,49 @@ def pad_data(data):
     padding_len = 64 - len(data) % 64
     return data + [0] * padding_len
 
-def bits_to_binary_string(bits):
-    """Mengonversi list bit ke string biner"""
-    return ''.join(str(b) for b in bits)
+def generate_key():
+    """Menghasilkan kunci 8 byte secara acak"""
+    return os.urandom(8)
+
+def encrypt_ctr(plaintext_bits, key, nonce):
+    """Enkripsi menggunakan mode Counter (CTR)"""
+    ciphertext_bits = []
+    counter = nonce  # Inisialisasi counter
+
+    for i in range(0, len(plaintext_bits), 64):
+        block = plaintext_bits[i:i + 64]  # Ambil blok plaintext 64 bit
+
+        # Enkripsi counter untuk menghasilkan keystream
+        counter_bits = [int(bit) for bit in format(counter, '064b')]  # Ubah counter ke 64 bit
+        keystream = des_encrypt_block(counter_bits, key)
+
+        # XOR keystream dengan plaintext untuk menghasilkan ciphertext
+        encrypted_block = xor(block, keystream)
+        ciphertext_bits.extend(encrypted_block)
+
+        counter += 1  # Naikkan counter untuk blok berikutnya
+
+    return ciphertext_bits
 
 def main():
-    key = [0] * 64 
+    sKey = generate_key()  # Menghasilkan kunci baru
+    key = [int(bit) for byte in sKey for bit in format(byte, '08b')]
     plaintext = input("Masukkan teks yang ingin dienkripsi: ")
     plaintext_bits = str_to_bits(plaintext)
     plaintext_bits = pad_data(plaintext_bits)
 
-    # Enkripsi
-    ciphertext_bits = []
-    for i in range(0, len(plaintext_bits), 64):
-        block = plaintext_bits[i:i + 64]
-        encrypted_block = des_encrypt_block(block, key)
-        ciphertext_bits.extend(encrypted_block)
+    # Menggunakan nonce sebagai counter awal (misal 0)
+    nonce = 0
+
+    # Enkripsi dengan CTR
+    ciphertext_bits = encrypt_ctr(plaintext_bits, key, nonce)
 
     # Mengonversi kembali ke teks untuk ditampilkan
-    ciphertext_binary = bits_to_binary_string(ciphertext_bits)
+    # ciphertext_binary = ''.join(str(b) for b in ciphertext_bits)
     # print(f"Ciphertext (Biner): {ciphertext_binary}")
 
-    # Dekripsi
-    decrypted_bits = []
-    for i in range(0, len(ciphertext_bits), 64):
-        block = ciphertext_bits[i:i + 64]
-        decrypted_block = des_decrypt_block(block, key)
-        decrypted_bits.extend(decrypted_block)
-
+    # Untuk dekripsi menggunakan fungsi yang sama karena CTR adalah simetris
+    decrypted_bits = encrypt_ctr(ciphertext_bits, key, nonce)
     decrypted_text = bits_to_str(decrypted_bits)
     print(f"Decrypted: {decrypted_text}")
 
