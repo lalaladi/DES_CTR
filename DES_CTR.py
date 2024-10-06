@@ -1,53 +1,100 @@
-import os
+# Tabel dan konstanta untuk DES
+IP = [58, 50, 42, 34, 26, 18, 10, 2,
+      60, 52, 44, 36, 28, 20, 12, 4,
+      62, 54, 46, 38, 30, 22, 14, 6,
+      64, 56, 48, 40, 32, 24, 16, 8,
+      57, 49, 41, 33, 25, 17, 9, 1,
+      59, 51, 43, 35, 27, 19, 11, 3,
+      61, 53, 45, 37, 29, 21, 13, 5,
+      63, 55, 47, 39, 31, 23, 15, 7]
 
-def int_to_bytes(n, length):
-    return n.to_bytes(length, byteorder='big')
+IP_INV = [40, 8, 48, 16, 56, 24, 64, 32,
+          39, 7, 47, 15, 55, 23, 63, 31,
+          38, 6, 46, 14, 54, 22, 62, 30,
+          37, 5, 45, 13, 53, 21, 61, 29,
+          36, 4, 44, 12, 52, 20, 60, 28,
+          35, 3, 43, 11, 51, 19, 59, 27,
+          34, 2, 42, 10, 50, 18, 58, 26,
+          33, 1, 41, 9, 49, 17, 57, 25]
 
-def bytes_to_int(b):
-    return int.from_bytes(b, byteorder='big')
+def permute(bits, table):
+    """Melakukan permutasi bit berdasarkan tabel tertentu"""
+    return [bits[x - 1] for x in table]
 
-def xor_bytes(block1, block2):    # Operasi XOR antara dua blok byte
-    return bytes([b1 ^ b2 for b1, b2 in zip(block1, block2)])
+def xor(bits1, bits2):
+    """Operasi XOR antara dua list bit"""
+    return [b1 ^ b2 for b1, b2 in zip(bits1, bits2)]
+
+def feistel_function(right, subkey):
+    # Contoh fungsi Feistel sederhana yang hanya menggunakan XOR
+    return xor(right, subkey)
 
 def des_encrypt_block(block, key):
-    return xor_bytes(block, key)
+    """Enkripsi satu blok (64-bit) menggunakan kunci 64-bit"""
+    # Permutasi awal
+    block = permute(block, IP)
 
-def ctr_mode(data, key, iv, encrypt=True):
-    block_size = 8
-    counter = bytes_to_int(iv)
-    result = bytearray()
-    
-    for i in range(0, len(data), block_size):
-        block = data[i:i + block_size]
-        encrypted_counter = des_encrypt_block(int_to_bytes(counter, block_size), key)
-        result_block = xor_bytes(block, encrypted_counter)
-        result.extend(result_block)
-        counter += 1
+    # Membagi blok menjadi dua bagian 32-bit
+    left, right = block[:32], block[32:]
 
-    return bytes(result)
+    # 16 putaran DES
+    for _ in range(16):
+        new_right = xor(left, feistel_function(right, key))
+        left = right
+        right = new_right
 
-def bytes_to_binary_string(b):
-    return ''.join(format(byte, '08b') for byte in b)  # Ubah byte ke biner
+    # Gabungkan kembali dan permutasi akhir
+    combined = right + left
+    return permute(combined, IP_INV)
 
-def generate_key():
-    return os.urandom(8)  # Menghasilkan kunci 8 byte secara acak
+def des_decrypt_block(block, key):
+    """Dekripsi satu blok (64-bit) menggunakan kunci 64-bit"""
+    # Sama seperti enkripsi, tapi urutan subkunci dibalik
+    return des_encrypt_block(block, key)  # Karena operasi simetris
+
+def str_to_bits(s):
+    """Mengonversi string ke bit list"""
+    return [int(bit) for byte in s.encode('utf-8') for bit in format(byte, '08b')]
+
+def bits_to_str(bits):
+    """Mengonversi bit list kembali ke string"""
+    return ''.join(chr(int(''.join(str(x) for x in bits[i:i + 8]), 2)) for i in range(0, len(bits), 8))
+
+def pad_data(data):
+    """Menambahkan padding agar panjangnya kelipatan 64 bit"""
+    padding_len = 64 - len(data) % 64
+    return data + [0] * padding_len
+
+def bits_to_binary_string(bits):
+    """Mengonversi list bit ke string biner"""
+    return ''.join(str(b) for b in bits)
 
 def main():
-    sKey = generate_key()  # Menghasilkan kunci baru
-    iv = bytes([0x00, 0x01, 0x02, 0x03, 0x00, 0x00, 0x00, 0x01])
-
+    key = [0] * 64 
     plaintext = input("Masukkan teks yang ingin dienkripsi: ")
-    print("Plaintext :", plaintext)
-    plaintext_bytes = plaintext.encode('utf-8')
-    
+    plaintext_bits = str_to_bits(plaintext)
+    plaintext_bits = pad_data(plaintext_bits)
 
-    ciphertext_bytes = ctr_mode(plaintext_bytes, sKey, iv, encrypt=True)
-    print("Ciphertext :", ciphertext_bytes)
-    print("Ciphertext (Biner):", bytes_to_binary_string(ciphertext_bytes))
+    # Enkripsi
+    ciphertext_bits = []
+    for i in range(0, len(plaintext_bits), 64):
+        block = plaintext_bits[i:i + 64]
+        encrypted_block = des_encrypt_block(block, key)
+        ciphertext_bits.extend(encrypted_block)
 
-    decrypted_bytes = ctr_mode(ciphertext_bytes, sKey, iv, encrypt=False)
-    decrypted_text = decrypted_bytes.decode('utf-8')
-    print("Decrypted (Text):", decrypted_text)
+    # Mengonversi kembali ke teks untuk ditampilkan
+    ciphertext_binary = bits_to_binary_string(ciphertext_bits)
+    print(f"Ciphertext (Biner): {ciphertext_binary}")
+
+    # Dekripsi
+    decrypted_bits = []
+    for i in range(0, len(ciphertext_bits), 64):
+        block = ciphertext_bits[i:i + 64]
+        decrypted_block = des_decrypt_block(block, key)
+        decrypted_bits.extend(decrypted_block)
+
+    decrypted_text = bits_to_str(decrypted_bits)
+    print(f"Decrypted: {decrypted_text}")
 
 if __name__ == "__main__":
     main()
