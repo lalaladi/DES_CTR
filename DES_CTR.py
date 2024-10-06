@@ -84,7 +84,7 @@ def main():
 
     # Mengonversi kembali ke teks untuk ditampilkan
     ciphertext_binary = bits_to_binary_string(ciphertext_bits)
-    print(f"Ciphertext (Biner): {ciphertext_binary}")
+    # print(f"Ciphertext (Biner): {ciphertext_binary}")
 
     # Dekripsi
     decrypted_bits = []
